@@ -1,12 +1,11 @@
-"""
-🛠️ TOOL REGISTRY & SCHEMAS (Dành cho Role 2: Tool & Spec Engineer)
-Nơi khai báo tất cả các "món đồ nghề" mà ReAct Agent có thể gọi.
-"""
+"""Các tool và dữ liệu giả lập dành cho Cupid ReAct Agent.
 
-"""
-Cupid Agent Tool Registry
-Các công cụ mà ReAct Agent có thể sử dụng để tìm kiếm,
-phân tích và hỗ trợ kết nối người dùng.
+Module cung cấp các hàm quản lý hồ sơ, tìm kiếm và phân tích độ tương thích,
+kiểm tra tương tác, ghi nhận phản hồi và đề xuất hoạt động gặp mặt. Các tool
+trả về chuỗi JSON theo cùng một schema để Agent có thể xử lý nhất quán.
+
+Dữ liệu trong module hiện được lưu trong bộ nhớ và chỉ phục vụ demo/prototype;
+chưa có kết nối cơ sở dữ liệu hoặc dịch vụ thời gian thực.
 """
 
 import json
@@ -40,17 +39,6 @@ USER_PROFILES = {
         "preferred_city": ["Hà Nội"],
         "dealbreakers": [],
     },
-    "U003": {
-        "name": "An",
-        "age": 24,
-        "city": "Đà Nẵng",
-        "interests": ["thể thao", "du lịch", "âm nhạc"],
-        "personality": ["năng động", "hướng ngoại"],
-        "relationship_goal": "kết bạn",
-        "preferred_age_range": [20, 26],
-        "preferred_city": ["Đà Nẵng", "TP.HCM"],
-        "dealbreakers": [],
-    },
 }
 
 MATCH_FEEDBACK = []
@@ -61,9 +49,23 @@ def tool_response(
     data: Any = None,
     error: str | None = None
 ) -> str:
-    """
-    Chuẩn hóa kết quả trả về của mọi tool.
-    """
+    """Tạo phản hồi JSON thống nhất cho các tool của Cupid Agent.
+
+        Hàm đóng gói trạng thái thực thi, dữ liệu kết quả và thông báo lỗi vào
+        cùng một cấu trúc để ReAct Agent có thể xử lý nhất quán.
+
+        Args:
+            success: Cho biết tool thực thi thành công hay thất bại.
+            data: Dữ liệu kết quả của tool. Mặc định là ``None``.
+            error: Thông báo lỗi khi ``success`` là ``False``. Mặc định là ``None``.
+
+        Returns:
+            Chuỗi JSON gồm ba trường ``success``, ``data`` và ``error``.
+
+        Raises:
+            TypeError: Nếu ``data`` hoặc ``error`` chứa giá trị không thể tuần tự
+                hóa bằng ``json.dumps``.
+        """
     return json.dumps(
         {
             "success": success,
@@ -79,15 +81,16 @@ def tool_response(
 # =========================================================
 
 def get_user_profile(user_id: str) -> str:
-    """
-    Lấy hồ sơ của một người dùng.
+    """Lấy hồ sơ ghép đôi của một người dùng từ cơ sở dữ liệu giả lập.
 
-    Args:
-        user_id: Mã định danh người dùng, ví dụ U001.
+        Args:
+            user_id: Mã định danh duy nhất của người dùng, ví dụ ``"U001"``.
 
-    Returns:
-        Chuỗi JSON chứa thông tin hồ sơ.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa. Khi tìm thấy hồ sơ, trường ``data`` chứa
+            ``user_id`` và ``profile``. Khi không tìm thấy, ``success`` là
+            ``False`` và trường ``error`` chứa thông báo tương ứng.
+        """
     profile = USER_PROFILES.get(user_id)
 
     if profile is None:
@@ -110,17 +113,24 @@ def update_user_profile(
     field: str,
     value: Any,
 ) -> str:
-    """
-    Cập nhật một trường trong hồ sơ người dùng.
+    """Cập nhật một trường được phép trong hồ sơ người dùng.
 
-    Args:
-        user_id: Mã người dùng.
-        field: Tên trường cần cập nhật.
-        value: Giá trị mới.
+        Args:
+            user_id: Mã định danh của người dùng cần cập nhật.
+            field: Tên trường hồ sơ cần thay đổi. Các trường hợp lệ gồm ``city``,
+                ``interests``, ``personality``, ``relationship_goal``,
+                ``preferred_age_range``, ``preferred_city`` và ``dealbreakers``.
+            value: Giá trị mới được gán cho trường đã chọn.
 
-    Returns:
-        Kết quả cập nhật dưới dạng JSON.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa trường đã cập nhật và giá trị mới. Nếu
+            ``user_id`` không tồn tại hoặc ``field`` không được phép, kết quả có
+            ``success=False`` và mô tả lỗi trong trường ``error``.
+
+        Notes:
+            Hàm thay đổi trực tiếp dữ liệu trong biến toàn cục ``USER_PROFILES``.
+            Dữ liệu chỉ tồn tại trong bộ nhớ và sẽ mất khi chương trình kết thúc.
+        """
     if user_id not in USER_PROFILES:
         return tool_response(
             success=False,
@@ -156,18 +166,21 @@ def update_user_profile(
 
 
 def extract_preferences(description: str) -> str:
-    """
-    Trích xuất tiêu chí ghép đôi từ mô tả tự nhiên.
+    """Trích xuất tiêu chí ghép đôi từ mô tả ngôn ngữ tự nhiên.
 
-    Đây là phiên bản rule-based đơn giản. Trong hệ thống thật,
-    có thể sử dụng LLM để tạo structured output.
+        Hàm sử dụng luật so khớp từ khóa để nhận diện sở thích và mục tiêu quan hệ;
+        đây không phải là mô hình NLP hoặc lời gọi LLM.
 
-    Args:
-        description: Mô tả của người dùng.
+        Args:
+            description: Đoạn mô tả tự nhiên chứa các sở thích hoặc mục tiêu quan hệ
+                của người dùng.
 
-    Returns:
-        Các tiêu chí được trích xuất.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa. Trường ``data`` gồm danh sách ``interests``,
+            ``relationship_goal`` được nhận diện và ``original_description``.
+            Những thông tin không khớp danh sách từ khóa định sẵn sẽ không được
+            trích xuất.
+        """
     text = description.lower()
 
     interests = []
@@ -211,16 +224,25 @@ def check_dealbreakers(
     source_user_id: str,
     candidate_user_id: str,
 ) -> str:
-    """
-    Kiểm tra các tiêu chí không thể chấp nhận giữa hai hồ sơ.
+    """Kiểm tra tiêu chí loại trừ của người dùng đối với một ứng viên.
 
-    Args:
-        source_user_id: Người đang tìm kiếm.
-        candidate_user_id: Ứng viên được đánh giá.
+        Hàm đối chiếu danh sách ``dealbreakers`` của người tìm kiếm với trường
+        ``traits`` của ứng viên.
 
-    Returns:
-        Kết quả kiểm tra dealbreaker.
-    """
+        Args:
+            source_user_id: Mã người dùng đang thực hiện tìm kiếm.
+            candidate_user_id: Mã ứng viên cần được kiểm tra.
+
+        Returns:
+            Chuỗi JSON chuẩn hóa. Trường ``data.passed`` cho biết ứng viên có vượt
+            qua bộ lọc hay không; ``data.violations`` liệt kê các tiêu chí vi phạm.
+            Nếu một trong hai hồ sơ không tồn tại, kết quả trả về ``success=False``.
+
+        Notes:
+            Nếu hồ sơ ứng viên không có trường ``traits``, hàm coi danh sách đặc
+            điểm là rỗng. Với dữ liệu mẫu hiện tại, điều này có thể khiến mọi ứng
+            viên vượt qua kiểm tra dealbreaker.
+        """
     source = USER_PROFILES.get(source_user_id)
     candidate = USER_PROFILES.get(candidate_user_id)
 
@@ -252,22 +274,26 @@ def calculate_compatibility(
     user_a_id: str,
     user_b_id: str,
 ) -> str:
-    """
-    Tính điểm tương thích giữa hai người dùng.
+    """Tính điểm tương thích giữa hai hồ sơ người dùng.
 
-    Công thức minh họa:
-    - Sở thích chung: 40 điểm
-    - Mục tiêu quan hệ: 25 điểm
-    - Thành phố phù hợp: 20 điểm
-    - Độ tuổi phù hợp: 15 điểm
+        Điểm tối đa là 100, gồm: sở thích chung 40 điểm, mục tiêu quan hệ 25 điểm,
+        vị trí 20 điểm và độ tuổi 15 điểm. Điểm sở thích sử dụng tỷ lệ giao trên
+        hợp của hai tập sở thích.
 
-    Args:
-        user_a_id: Mã người dùng thứ nhất.
-        user_b_id: Mã người dùng thứ hai.
+        Args:
+            user_a_id: Mã định danh của người dùng thứ nhất.
+            user_b_id: Mã định danh của người dùng thứ hai.
 
-    Returns:
-        Tổng điểm và điểm theo từng tiêu chí.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa ``total_score``, ``maximum_score``,
+            ``score_breakdown`` và ``common_interests``. Nếu một hồ sơ không tồn
+            tại, kết quả có ``success=False`` và thông báo trong ``error``.
+
+        Notes:
+            Điểm vị trí được tính theo góc nhìn của ``user_a_id``: ứng viên nhận
+            15 điểm khi thành phố của người B nằm trong ``preferred_city`` của
+            người A. Vì vậy kết quả có thể không hoàn toàn đối xứng khi đảo hai ID.
+        """
     user_a = USER_PROFILES.get(user_a_id)
     user_b = USER_PROFILES.get(user_b_id)
 
@@ -357,17 +383,25 @@ def search_candidates(
     minimum_score: float = 50,
     limit: int = 5,
 ) -> str:
-    """
-    Tìm các ứng viên có điểm tương thích cao nhất.
+    """Tìm và xếp hạng các ứng viên theo điểm tương thích.
 
-    Args:
-        user_id: Người dùng cần tìm ứng viên.
-        minimum_score: Điểm tương thích tối thiểu.
-        limit: Số ứng viên tối đa.
+        Hàm duyệt các hồ sơ khác trong ``USER_PROFILES``, gọi
+        ``calculate_compatibility`` và giữ lại những ứng viên đạt ngưỡng điểm.
 
-    Returns:
-        Danh sách ứng viên được sắp xếp theo điểm giảm dần.
-    """
+        Args:
+            user_id: Mã người dùng cần tìm ứng viên phù hợp.
+            minimum_score: Điểm tương thích tối thiểu để một ứng viên được giữ lại.
+                Mặc định là ``50``.
+            limit: Số ứng viên tối đa được trả về. Mặc định là ``5``.
+
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa số ứng viên và danh sách đã sắp xếp theo
+            ``compatibility_score`` giảm dần. Nếu ``user_id`` không tồn tại,
+            kết quả trả về ``success=False``.
+
+        Notes:
+            Hàm hiện chưa kiểm tra miền giá trị của ``minimum_score`` và ``limit``.
+        """
     if user_id not in USER_PROFILES:
         return tool_response(
             success=False,
@@ -425,19 +459,21 @@ def explain_compatibility(
     user_a_id: str,
     user_b_id: str,
 ) -> str:
-    """
-    Tạo dữ liệu giải thích mức độ tương thích.
+    """Tạo dữ liệu có cấu trúc để giải thích mức độ tương thích.
 
-    Tool chỉ trả về các bằng chứng có cấu trúc.
-    Agent sử dụng dữ liệu này để tạo câu trả lời tự nhiên.
+        Hàm chuyển kết quả chấm điểm thành các nhóm điểm mạnh, khác biệt, sở thích
+        chung và khuyến nghị. ReAct Agent có thể dùng dữ liệu này để tạo câu trả
+        lời tự nhiên nhưng không nên tự bịa thêm bằng chứng.
 
-    Args:
-        user_a_id: Người dùng thứ nhất.
-        user_b_id: Người dùng thứ hai.
+        Args:
+            user_a_id: Mã định danh của người dùng thứ nhất.
+            user_b_id: Mã định danh của người dùng thứ hai.
 
-    Returns:
-        Điểm mạnh, khác biệt và khuyến nghị.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa ``compatibility_score``, ``strengths``,
+            ``differences``, ``common_interests`` và ``recommendation``. Nếu bước
+            tính điểm thất bại, hàm chuyển tiếp nguyên phản hồi lỗi.
+        """
     raw_result = calculate_compatibility(user_a_id, user_b_id)
     result = json.loads(raw_result)
 
@@ -509,12 +545,21 @@ def check_mutual_interest(
     user_a_id: str,
     user_b_id: str,
 ) -> str:
-    """
-    Kiểm tra hai bên đã đồng ý kết nối hay chưa.
+    """Kiểm tra liệu hai người dùng có cùng đồng ý kết nối hay không.
 
-    Trong phiên bản thật, dữ liệu này phải được lấy từ database
-    và không được suy đoán bởi LLM.
-    """
+        Args:
+            user_a_id: Mã định danh của người dùng thứ nhất.
+            user_b_id: Mã định danh của người dùng thứ hai.
+
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa ``user_a_interested``,
+            ``user_b_interested`` và ``mutual_match``.
+
+        Notes:
+            Dữ liệu hiện là mock data trong bộ nhớ và phép tra cứu phụ thuộc vào
+            thứ tự cặp ID. Hệ thống thật phải lấy trạng thái đồng thuận từ cơ sở dữ
+            liệu và không được để LLM tự suy đoán.
+        """
     # Mock data
     interest_data = {
         ("U001", "U002"): {
@@ -547,16 +592,17 @@ def generate_icebreaker(
     user_a_id: str,
     user_b_id: str,
 ) -> str:
-    """
-    Tạo dữ liệu cho câu mở đầu dựa trên sở thích chung.
+    """Tạo gợi ý mở đầu cuộc trò chuyện dựa trên sở thích chung.
 
-    Args:
-        user_a_id: Người gửi lời chào.
-        user_b_id: Người nhận lời chào.
+        Args:
+            user_a_id: Mã người dùng dự kiến gửi lời chào.
+            user_b_id: Mã người dùng dự kiến nhận lời chào.
 
-    Returns:
-        Các gợi ý bắt đầu cuộc trò chuyện.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa ``common_interests`` và danh sách
+            ``suggestions``. Nếu không thể phân tích hai hồ sơ, kết quả trả về
+            ``success=False`` và thông báo lỗi.
+        """
     match_result = json.loads(
         calculate_compatibility(user_a_id, user_b_id)
     )
@@ -593,15 +639,20 @@ def generate_icebreaker(
 
 
 def moderate_message(message: str) -> str:
-    """
-    Kiểm tra an toàn cơ bản cho tin nhắn.
+    """Kiểm tra tin nhắn bằng bộ luật an toàn dựa trên từ khóa.
 
-    Args:
-        message: Nội dung cần kiểm tra.
+        Args:
+            message: Nội dung tin nhắn cần kiểm tra trước khi gửi.
 
-    Returns:
-        Kết quả cho phép, cảnh báo hoặc chặn.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa ``allowed``, ``risk_level``,
+            ``detected_patterns`` và hành động ``action`` đề xuất.
+
+        Notes:
+            Đây chỉ là bộ lọc chuỗi đơn giản, không phát hiện được cách diễn đạt
+            biến thể, ngữ cảnh hoặc ý định ẩn. Không nên sử dụng riêng hàm này như
+            một hệ thống kiểm duyệt hoàn chỉnh trong môi trường production.
+        """
     text = message.lower()
 
     blocked_patterns = [
@@ -646,18 +697,22 @@ def record_match_feedback(
     rating: int,
     feedback: str = "",
 ) -> str:
-    """
-    Lưu đánh giá của người dùng về một ứng viên.
+    """Lưu đánh giá của người dùng về một ứng viên vào bộ nhớ tạm.
 
-    Args:
-        user_id: Người đưa ra đánh giá.
-        candidate_id: Ứng viên được đánh giá.
-        rating: Điểm từ 1 đến 5.
-        feedback: Nhận xét bổ sung.
+        Args:
+            user_id: Mã người dùng gửi đánh giá.
+            candidate_id: Mã ứng viên được đánh giá.
+            rating: Điểm nguyên từ 1 đến 5.
+            feedback: Nội dung nhận xét bổ sung. Mặc định là chuỗi rỗng.
 
-    Returns:
-        Kết quả lưu feedback.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa trạng thái lưu và bản ghi feedback. Nếu
+            ``rating`` nằm ngoài khoảng 1–5, kết quả trả về ``success=False``.
+
+        Notes:
+            Hàm thêm trực tiếp bản ghi vào biến toàn cục ``MATCH_FEEDBACK`` và
+            hiện chưa xác minh sự tồn tại của ``user_id`` hoặc ``candidate_id``.
+        """
     if rating < 1 or rating > 5:
         return tool_response(
             success=False,
@@ -691,17 +746,19 @@ def suggest_date_ideas(
     interests: list[str],
     budget_level: str = "trung bình",
 ) -> str:
-    """
-    Đề xuất hoạt động gặp mặt tại một thành phố.
+    """Đề xuất hoạt động gặp mặt dựa trên thành phố và sở thích chung.
 
-    Args:
-        city: Thành phố tổ chức cuộc gặp.
-        interests: Sở thích chung.
-        budget_level: thấp, trung bình hoặc cao.
+        Args:
+            city: Thành phố dự kiến tổ chức cuộc gặp.
+            interests: Danh sách sở thích chung dùng để chọn hoạt động phù hợp.
+            budget_level: Mức ngân sách dự kiến, thường là ``"thấp"``,
+                ``"trung bình"`` hoặc ``"cao"``. Mặc định là ``"trung bình"``.
 
-    Returns:
-        Danh sách hoạt động đề xuất.
-    """
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa thành phố, danh sách ``ideas`` và lưu ý an
+            toàn cho lần gặp đầu tiên. Nếu không có sở thích phù hợp với luật định
+            sẵn, hàm trả về một gợi ý gặp tại không gian công cộng.
+        """
     ideas = []
 
     if "cà phê" in interests:
@@ -762,9 +819,21 @@ def suggest_date_ideas(
 
 
 def get_weather(location: str) -> str:
-    """
-    Tra cứu thời tiết hiện tại của một thành phố.
-    """
+    """Tra cứu dữ liệu thời tiết giả lập cho một thành phố được hỗ trợ.
+
+        Args:
+            location: Tên thành phố cần tra cứu. Hàm hiện hỗ trợ Hà Nội,
+                TP.HCM/Hồ Chí Minh và Đà Nẵng, gồm một số biến thể không dấu.
+
+        Returns:
+            Chuỗi JSON chuẩn hóa chứa ``location``, ``temperature``,
+            ``condition`` và ``outdoor_suitable``. Nếu địa điểm không được hỗ trợ,
+            kết quả trả về ``success=False`` và thông báo trong ``error``.
+
+        Notes:
+            Dữ liệu được hard-code để phục vụ demo, không phải thông tin thời tiết
+            thời gian thực và không được lấy từ API bên ngoài.
+        """
     loc_lower = location.lower()
 
     if "hà nội" in loc_lower or "ha noi" in loc_lower:
