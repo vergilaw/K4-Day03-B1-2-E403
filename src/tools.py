@@ -55,6 +55,17 @@ USER_PROFILES: dict[str, dict[str, Any]] = {
         "preferred_city": ["Hà Nội"],
         "dealbreakers": [],
     },
+    "U003": {
+        "name": "Huy",
+        "age": 22,
+        "city": "Hà Nội",
+        "interests": ["cà phê", "đọc sách", "công nghệ"],
+        "personality": ["hướng nội", "sâu sắc", "mơ mộng"],
+        "relationship_goal": "nghiêm túc",
+        "preferred_age_range": [20, 26],
+        "preferred_city": ["Hà Nội"],
+        "dealbreakers": ["hút thuốc"],
+    },
 }
 
 MATCH_FEEDBACK: list[dict[str, Any]] = []
@@ -186,6 +197,32 @@ def _validate_string_list(
     return None
 
 
+def _coerce_string_list(value: Any) -> Any:
+    """Quy đổi chuỗi ngăn cách sang ``list[str]`` cho các tool nhận danh sách.
+
+    Args:
+        value: Giá trị thô do Agent truyền vào.
+
+    Returns:
+        ``list[str]`` nếu ``value`` là chuỗi có nội dung, ngược lại trả nguyên
+        giá trị ban đầu để hàm kiểm tra phía sau báo lỗi phù hợp.
+
+    Notes:
+        Chỉ tách theo ``|``, ``;`` và ``/``. Dấu phẩy đã được ``parse_action``
+        dùng làm ký tự phân tách tham số nên không còn nguyên vẹn khi tới đây.
+    """
+    if not isinstance(value, str):
+        return value
+
+    separators = ["|", ";", "/"]
+    parts = [value]
+    for separator in separators:
+        parts = [chunk for part in parts for chunk in part.split(separator)]
+
+    cleaned = [part.strip() for part in parts if part.strip()]
+    return cleaned or value
+
+
 def _parse_tool_response(raw_result: Any, source_tool: str) -> tuple[dict[str, Any] | None, str | None]:
     """Phân tích phản hồi nội bộ của một tool mà không để lỗi JSON lan ra."""
     if not isinstance(raw_result, str):
@@ -298,6 +335,64 @@ def get_user_profile(user_id: str) -> str:
         data={
             "user_id": user_id.strip(),
             "profile": profile,
+        },
+    )
+
+
+@safe_tool
+def find_user_by_name(name: str) -> str:
+    """Tra ``user_id`` từ tên hiển thị của người dùng.
+
+    Các tool ghép đôi đều nhận ``user_id`` (ví dụ ``U001``), trong khi người
+    dùng thường nhắc tới nhau bằng tên. Tool này là bước trung gian để Agent
+    quy đổi tên sang ``user_id`` thay vì tự đoán.
+
+    Args:
+        name: Tên hiển thị cần tra, không phân biệt hoa thường.
+
+    Returns:
+        Chuỗi JSON. Khi tìm thấy, ``data`` chứa danh sách ``matches``; khi
+        không có ai trùng tên, ``success`` là ``False`` kèm thông báo lỗi.
+
+    Notes:
+        Trả về danh sách thay vì một kết quả duy nhất vì nhiều hồ sơ có thể
+        trùng tên. Agent phải hỏi lại người dùng nếu ``match_count > 1``.
+    """
+    error = _validate_non_empty_string(name, "name")
+    if error:
+        return tool_response(False, error=error)
+
+    normalized_name = name.strip()
+    target = normalized_name.casefold()
+
+    matches = [
+        {
+            "user_id": user_id,
+            "name": profile.get("name"),
+            "age": profile.get("age"),
+            "city": profile.get("city"),
+        }
+        for user_id, profile in list(USER_PROFILES.items())
+        if isinstance(profile, dict)
+        and isinstance(profile.get("name"), str)
+        and profile["name"].casefold() == target
+    ]
+
+    if not matches:
+        return tool_response(
+            False,
+            error=(
+                f"Không tìm thấy hồ sơ nào mang tên '{normalized_name}'. "
+                "Hãy kiểm tra lại tên hoặc yêu cầu người dùng cung cấp user_id."
+            ),
+        )
+
+    return tool_response(
+        True,
+        data={
+            "query_name": normalized_name,
+            "match_count": len(matches),
+            "matches": matches,
         },
     )
 
@@ -1157,10 +1252,19 @@ def suggest_date_ideas(
     interests: list[str],
     budget_level: str = "trung bình",
 ) -> str:
-    """Đề xuất hoạt động gặp mặt theo thành phố và sở thích."""
+    """Đề xuất hoạt động gặp mặt theo thành phố và sở thích.
+
+    Notes:
+        ``interests`` chấp nhận cả chuỗi ngăn cách bằng ``|``, ``;`` hoặc
+        ``/``. Giao thức ReAct truyền tham số dưới dạng văn bản phẳng nên
+        không diễn đạt được kiểu ``list``; nếu không quy đổi, tool luôn báo
+        lỗi ``'interests' phải là list[str]`` khi Agent gọi.
+    """
     error = _validate_non_empty_string(city, "city")
     if error:
         return tool_response(False, error=error)
+
+    interests = _coerce_string_list(interests)
 
     error = _validate_string_list(interests, "interests")
     if error:
@@ -1302,6 +1406,7 @@ def get_weather(location: str) -> str:
 AVAILABLE_TOOLS: dict[str, Callable[..., str]] = {
     # Profile
     "get_user_profile": get_user_profile,
+    "find_user_by_name": find_user_by_name,
     "update_user_profile": update_user_profile,
     "extract_preferences": extract_preferences,
 

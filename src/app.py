@@ -46,17 +46,64 @@ def load_test_cases():
         return json.load(f)
 
 
+# Tên tool thay thế mà LLM hay sinh ra do prompt/test case dùng cách gọi khác
+# với tên đã đăng ký trong AVAILABLE_TOOLS.
+TOOL_ALIASES = {
+    "search_matches": "search_candidates",
+    "search_profiles": "search_candidates",
+    "suggest_date_spot": "suggest_date_ideas",
+    "suggest_date_spots": "suggest_date_ideas",
+    "get_profile": "get_user_profile",
+    "find_user": "find_user_by_name",
+}
+
+
+def build_tool_map():
+    """Gộp AVAILABLE_TOOLS với bảng alias thành một bảng tra cứu duy nhất."""
+    tool_map = dict(AVAILABLE_TOOLS)
+    for alias, target in TOOL_ALIASES.items():
+        if alias not in tool_map and target in tool_map:
+            tool_map[alias] = tool_map[target]
+    return tool_map
+
+
+def is_provider_error(text: str) -> bool:
+    """
+    Nhận diện chuỗi lỗi do lớp Provider trả về thay vì nội dung từ LLM.
+
+    providers.py bắt mọi exception và trả về chuỗi dạng
+    '[Gemini Exception]: ...' hoặc '[OpenAI Error]: ...'. Nếu không nhận ra,
+    vòng lặp ReAct sẽ in nguyên stack lỗi cho người dùng dưới nhãn Final Answer.
+    """
+    if not isinstance(text, str):
+        return False
+    return bool(re.match(r"^\s*\[[^\]]*(Exception|Error)[^\]]*\]", text))
+
+
 def parse_action(text: str):
     """
     Trích xuất tên Action và các tham số từ phản hồi sinh ra của LLM.
     Ví dụ: 'Action: get_user_profile[U001]' -> ('get_user_profile', ['U001'])
            'Action: calculate_compatibility[U001, U002]' -> ('calculate_compatibility', ['U001', 'U002'])
+
+    Pattern 2 (không có tiền tố 'Action:') chỉ được chấp nhận khi tên bắt được
+    là một tool có thật. Nếu không, mọi dấu ngoặc đơn trong câu văn xuôi đều bị
+    hiểu nhầm thành lời gọi tool — ví dụ 'Nguyễn Hà Zzz (MBTI: XXXX, sống ở Sao
+    Hỏa)' từng bị parse thành tool ảo 'Zzz'.
     """
+    known_tools = build_tool_map()
+
     # Pattern 1: Action: tool_name[arg1, arg2] hoặc tool_name(arg1, arg2)
     match = re.search(r"Action:\s*([a-zA-Z0-9_]+)\s*[\[\(](.*?)[\]\)]", text, re.IGNORECASE)
+
     if not match:
-        # Pattern 2: tool_name[arg1, arg2] không có tiền tố Action:
-        match = re.search(r"([a-zA-Z0-9_]+)\s*[\[\(](.*?)[\]\)]", text)
+        # Pattern 2: tool_name[arg1, arg2] không có tiền tố Action: —
+        # chỉ nhận khi tên trùng một tool đã đăng ký.
+        for candidate in re.finditer(r"([a-zA-Z0-9_]+)\s*[\[\(](.*?)[\]\)]", text, re.DOTALL):
+            if candidate.group(1).strip() in known_tools:
+                match = candidate
+                break
+
         if not match:
             return None, []
 
@@ -76,18 +123,15 @@ def execute_tool_call(tool_name: str, args: list):
     """
     Thực thi công cụ từ AVAILABLE_TOOLS với cơ chế xử lý lỗi và mapping alias.
     """
-    tool_map = dict(AVAILABLE_TOOLS)
-    
-    # Mapping alias nếu LLM gọi tên tương tự trong prompt
-    if "search_matches" not in tool_map and "search_candidates" in tool_map:
-        tool_map["search_matches"] = tool_map["search_candidates"]
-    if "suggest_date_spot" not in tool_map and "suggest_date_ideas" in tool_map:
-        tool_map["suggest_date_spot"] = tool_map["suggest_date_ideas"]
+    tool_map = build_tool_map()
 
     if tool_name not in tool_map:
         return json.dumps({
             "success": False,
-            "error": f"Công cụ '{tool_name}' không có trong AVAILABLE_TOOLS."
+            "error": (
+                f"Công cụ '{tool_name}' không có trong AVAILABLE_TOOLS. "
+                f"Các công cụ hợp lệ: {sorted(AVAILABLE_TOOLS)}."
+            )
         }, ensure_ascii=False)
 
     func = tool_map[tool_name]
@@ -135,6 +179,13 @@ def run_react_agent(user_query: str, provider):
         # Sinh câu trả lời từ LLM với ReAct Prompt
         response_text = provider.generate(conversation_history, system_prompt=REACT_SYSTEM_PROMPT).strip()
         print(f"{response_text}")
+
+        # 🛡️ 3. GUARDRAIL - Provider Failure: không đổ raw stack ra cho người dùng
+        if is_provider_error(response_text):
+            print(f"\n🛡️ GUARDRAIL TRIGGERED: Lỗi từ LLM Provider, không phải nội dung trả lời. Ngắt an toàn!")
+            print(f"🔎 Chi tiết kỹ thuật (dành cho dev): {response_text}")
+            print(f"🏁 Final Answer: {SAFE_FALLBACK_MESSAGE}")
+            return
 
         # 2. Kiểm tra nếu LLM đã đưa ra Final Answer
         if "Final Answer:" in response_text:

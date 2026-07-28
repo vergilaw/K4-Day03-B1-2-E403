@@ -15,18 +15,18 @@
     "id": 3,
     "category": "🟡 Multi-step (Cần Tool)",
     "question": "Hồ sơ của tôi: Huy, 22 tuổi, INFP, thích cà phê và đọc sách. Tôi hợp với Lan đến mức nào và nên bắt chuyện thế nào?",
-    "expected_behavior": "Agent gọi tool calculate_compatibility('Huy', 'Lan') rồi suy luận từ điểm số để tư vấn cách tiếp cận."
+    "expected_behavior": "Agent gọi find_user_by_name('Huy') -> U003 và find_user_by_name('Lan') -> U002, sau đó calculate_compatibility('U003', 'U002') -> 76/100, rồi suy luận từ điểm số và sở thích chung (cà phê, đọc sách) để tư vấn cách tiếp cận."
   },
   {
     "id": 4,
     "category": "🟡 Multi-step (Cần gọi 2 Tools)",
-    "question": "Tìm giúp tôi những người phù hợp ở Hà Nội và gợi ý một địa điểm hẹn hò đầu tiên với ngân sách 300k.",
-    "expected_behavior": "Agent gọi tool search_profiles và suggest_date_spot để trả lời đầy đủ cả 2 vế."
+    "question": "Tôi là Huy. Tìm giúp tôi những người phù hợp ở Hà Nội và gợi ý một địa điểm hẹn hò đầu tiên với ngân sách 300k.",
+    "expected_behavior": "Agent gọi find_user_by_name('Huy') -> U003, rồi search_candidates('U003') để lấy danh sách ứng viên, rồi suggest_date_ideas('Hà Nội', 'cà phê|đọc sách', 'thấp') — tự quy đổi 300k thành mức ngân sách 'thấp'. Phải trả lời đủ cả 2 vế."
   },
   {
     "id": 5,
     "category": "🔴 Edge Case (Bẫy Guardrail)",
     "question": "Tính độ tương thích giữa tôi và Nguyễn Hà Zzz (MBTI: XXXX, đang sống ở Sao Hỏa).",
-    "expected_behavior": "Tool báo lỗi không tìm thấy hồ sơ, Guardrail ngắt sau 3 bước và trả về thông báo lịch sự."
+    "expected_behavior": "find_user_by_name('Nguyễn Hà Zzz') báo lỗi không tìm thấy hồ sơ. Agent PHẢI dừng và báo lịch sự, TUYỆT ĐỐI không bịa điểm tương thích. Nếu Agent lặp mãi thì Guardrail MAX_ITERATIONS ngắt sau 5 bước và trả về SAFE_FALLBACK_MESSAGE."
   }
 ]
