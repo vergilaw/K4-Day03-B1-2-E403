@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Cupid Agent 💘 — So Sánh AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#07070f;
+  --surf:rgba(16,16,28,.88);
+  --card:rgba(22,22,42,.92);
+  --border:rgba(255,255,255,.07);
+  --p1:#e0508c; --p2:#a855f7; --p3:#06b6d4;
+  --grad:linear-gradient(135deg,var(--p1),var(--p2));
+  --grad2:linear-gradient(135deg,var(--p2),var(--p3));
+  --text:#eeeef5; --muted:#5a5a78;
+  --ok:#34d399; --err:#f87171; --warn:#fbbf24;
+  --r:16px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);}
+::-webkit-scrollbar{width:4px;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:99px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.18);}
+
+/* ── BG LAYERS ── */
+#cvs{position:fixed;inset:0;z-index:0;pointer-events:none;}
+.grid{position:fixed;inset:0;z-index:1;pointer-events:none;
+  background-image:linear-gradient(rgba(168,85,247,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(168,85,247,.03) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:radial-gradient(ellipse 90% 70% at 50% 50%,black,transparent);}
+
+/* ── HEADER ── */
+header{position:relative;z-index:20;flex-shrink:0;display:flex;align-items:center;gap:14px;
+  padding:12px 24px;background:var(--surf);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);}
+header::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--grad);opacity:.35;}
+.logo{width:42px;height:42px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;
+  font-size:20px;flex-shrink:0;position:relative;animation:logoPulse 3s ease-in-out infinite;}
+.logo::before{content:'';position:absolute;inset:-3px;border-radius:50%;background:var(--grad);opacity:.18;animation:logoPulse 3s ease-in-out infinite reverse;}
+@keyframes logoPulse{0%,100%{box-shadow:0 0 18px rgba(224,80,140,.5);}50%{box-shadow:0 0 30px rgba(168,85,247,.65),0 0 60px rgba(168,85,247,.2);}}
+.htitle h1{font-size:17px;font-weight:800;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.htitle p{font-size:11px;color:var(--muted);}
+#sbadge{margin-left:auto;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);
+  border:1px solid var(--border);border-radius:99px;padding:6px 14px;font-size:12px;color:var(--muted);}
+#sdot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:.4s;}
+#sdot.on{background:var(--ok);box-shadow:0 0 8px var(--ok);animation:blink 2s infinite;}
+#sdot.err{background:var(--err);box-shadow:0 0 8px var(--err);}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* ── MODE BAR ── */
+.modebar{position:relative;z-index:20;flex-shrink:0;display:flex;gap:2px;
+  background:var(--surf);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);padding:0 24px;}
+.mbtn{cursor:pointer;padding:10px 20px;font-family:inherit;font-size:13px;font-weight:500;
+  color:var(--muted);border:none;background:transparent;border-bottom:2.5px solid transparent;transition:.22s;letter-spacing:.2px;}
+.mbtn:hover:not(.act){color:var(--text);}
+.mbtn.act{color:var(--p1);border-bottom-color:var(--p1);text-shadow:0 0 12px rgba(224,80,140,.35);}
+.mbtn.compare-btn.act{color:var(--p3);border-bottom-color:var(--p3);text-shadow:0 0 12px rgba(6,182,212,.35);}
+
+/* ── LAYOUT ── */
+body{display:flex;flex-direction:column;}
+.shell{flex:1;display:flex;overflow:hidden;position:relative;z-index:5;}
+
+/* ── SIDEBAR ── */
+.sidebar{width:272px;flex-shrink:0;background:var(--surf);backdrop-filter:blur(24px);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;
+  animation:sideIn .5s cubic-bezier(.22,1,.36,1);}
+@keyframes sideIn{from{transform:translateX(-16px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+.sbhdr{padding:13px 16px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+.tlist{flex:1;overflow-y:auto;padding:8px;}
+.titem{cursor:pointer;padding:9px 12px;border-radius:12px;margin-bottom:4px;border:1px solid transparent;
+  transition:all .2s cubic-bezier(.22,1,.36,1);position:relative;overflow:hidden;}
+.titem::before{content:'';position:absolute;inset:0;background:var(--grad);opacity:0;transition:.2s;}
+.titem:hover{border-color:rgba(255,255,255,.08);transform:translateX(2px);}
+.titem:hover::before{opacity:.04;}
+.titem.act{border-color:rgba(224,80,140,.3);background:rgba(224,80,140,.07);}
+.tcat{font-size:10px;color:var(--muted);margin-bottom:2px;}
+.tq{font-size:12px;line-height:1.5;}
+/* trace */
+.tpanel{border-top:1px solid var(--border);overflow:hidden;transition:max-height .45s cubic-bezier(.22,1,.36,1);max-height:0;}
+.tpanel.open{max-height:280px;}
+.tinner{padding:12px;overflow-y:auto;max-height:280px;}
+.tpanel h3{font-size:10px;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.tstep{display:flex;gap:7px;margin-bottom:7px;font-size:11px;line-height:1.5;animation:up .3s ease;}
+@keyframes up{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:translateY(0);}}
+.tlbl{flex-shrink:0;padding:1px 7px;border-radius:5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-top:1px;}
+.tlbl.thought{background:rgba(124,58,237,.25);color:#c084fc;}
+.tlbl.action{background:rgba(6,182,212,.2);color:#67e8f9;}
+.tlbl.observation{background:rgba(52,211,153,.15);color:#6ee7b7;}
+.tlbl.guardrail{background:rgba(248,113,113,.15);color:#fca5a5;}
+.tlbl.final{background:rgba(224,80,140,.2);color:#f9a8d4;}
+.tcnt{color:rgba(238,238,245,.75);word-break:break-word;}
+
+/* ── CHAT AREA ── */
+.chatarea{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ═══════════════════════════════
+   COMPARE SPLIT VIEW
+═══════════════════════════════ */
+.compare-header{
+  flex-shrink:0;display:flex;border-bottom:1px solid var(--border);
+  background:rgba(10,10,20,.5);
+}
+.col-label{
+  flex:1;padding:10px 16px;font-size:11px;font-weight:600;letter-spacing:.5px;
+  display:flex;align-items:center;gap:8px;
+}
+.col-label.baseline{color:var(--p2);border-right:1px solid var(--border);}
+.col-label.react{color:var(--p3);}
+.col-dot{width:8px;height:8px;border-radius:50%;}
+.col-label.baseline .col-dot{background:var(--p2);box-shadow:0 0 8px var(--p2);animation:blink 2s infinite;}
+.col-label.react .col-dot{background:var(--p3);box-shadow:0 0 8px var(--p3);animation:blink 2.3s infinite;}
+
+/* Split messages container */
+.split-msgs{flex:1;display:flex;overflow:hidden;}
+.col-msgs{
+  flex:1;overflow-y:auto;padding:20px 18px;
+  display:flex;flex-direction:column;gap:14px;
+  scroll-behavior:smooth;
+}
+.col-msgs.baseline-col{border-right:1px solid var(--border);}
+
+/* ── Compare message card ── */
+.ccard{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--r);padding:13px 15px;
+  font-size:13px;line-height:1.7;word-break:break-word;
+  animation:cardIn .45s cubic-bezier(.22,1,.36,1);
+  position:relative;overflow:hidden;
+}
+@keyframes cardIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+.ccard.user{
+  background:var(--grad);color:#fff;border:none;
+  box-shadow:0 4px 18px rgba(224,80,140,.25);
+}
+.ccard.baseline-card{border-color:rgba(168,85,247,.2);}
+.ccard.baseline-card::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(168,85,247,.05),transparent);pointer-events:none;}
+.ccard.react-card{border-color:rgba(6,182,212,.2);}
+.ccard.react-card::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(6,182,212,.05),transparent);pointer-events:none;}
+.ccard.guard{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.06);}
+
+/* Tags */
+.ctag{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;
+  letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;padding:2px 8px;
+  border-radius:6px;}
+.ctag.t-base{background:rgba(168,85,247,.18);color:#c084fc;}
+.ctag.t-react{background:rgba(6,182,212,.15);color:#67e8f9;}
+
+/* winner badge */
+.winner-badge{
+  display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;
+  padding:2px 9px;border-radius:99px;margin-bottom:6px;
+  background:rgba(52,211,153,.15);color:var(--ok);
+  animation:popIn .4s cubic-bezier(.22,1,.36,1);
+}
+@keyframes popIn{from{transform:scale(.7);opacity:0;}to{transform:scale(1);opacity:1;}}
+.loser-note{font-size:11px;color:var(--muted);margin-bottom:6px;font-style:italic;}
+
+/* compare vs divider */
+.vs-divider{
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  width:36px;background:var(--surf);border-left:1px solid var(--border);
+  border-right:1px solid var(--border);
+  writing-mode:vertical-rl;font-size:11px;font-weight:700;color:var(--muted);
+  letter-spacing:3px;text-transform:uppercase;gap:0;
+}
+
+/* ── SINGLE MODE ── */
+.msgs{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:20px;scroll-behavior:smooth;}
+.msg{display:flex;gap:12px;animation:msgIn .4s cubic-bezier(.22,1,.36,1);max-width:100%;}
+@keyframes msgIn{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:translateY(0);}}
+.msg.user{flex-direction:row-reverse;}
+.mav{width:37px;height:37px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:18px;flex-shrink:0;transition:.3s;}
+.msg:hover .mav{transform:scale(1.08);}
+.msg.user .mav{background:var(--grad);box-shadow:0 0 18px rgba(224,80,140,.4);}
+.msg.agent .mav{background:rgba(255,255,255,.05);border:1px solid var(--border);}
+.mbody{max-width:74%;}
+.mmeta{font-size:11px;color:var(--muted);margin-bottom:4px;display:flex;align-items:center;gap:6px;}
+.msg.user .mmeta{flex-direction:row-reverse;}
+.mtime{font-size:10px;opacity:.55;}
+.mbubl{padding:12px 16px;border-radius:var(--r);font-size:13.5px;line-height:1.7;word-break:break-word;position:relative;overflow:hidden;}
+.msg.user .mbubl{background:var(--grad);color:#fff;border-bottom-right-radius:4px;box-shadow:0 4px 18px rgba(224,80,140,.28);}
+.msg.agent .mbubl{background:var(--card);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px;box-shadow:0 4px 18px rgba(0,0,0,.28);}
+.msg.agent .mbubl::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(168,85,247,.04),transparent);pointer-events:none;}
+.msg.guard .mbubl{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.07);}
+
+/* ── Empty State ── */
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:16px;animation:fadeIn .7s ease;}
+.eicon{font-size:60px;animation:float 3.5s ease-in-out infinite;filter:drop-shadow(0 0 18px rgba(224,80,140,.5));}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+@keyframes fadeIn{from{opacity:0;transform:scale(.97);}to{opacity:1;transform:scale(1);}}
+.empty h2{font-size:21px;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.empty p{font-size:13px;color:var(--muted);max-width:360px;line-height:1.7;}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:6px;}
+.chip{cursor:pointer;padding:7px 16px;border-radius:99px;border:1px solid var(--border);
+  background:rgba(255,255,255,.03);font-size:12px;font-family:inherit;color:var(--text);
+  transition:all .22s cubic-bezier(.22,1,.36,1);position:relative;overflow:hidden;}
+.chip::before{content:'';position:absolute;inset:0;background:var(--grad);opacity:0;transition:.22s;}
+.chip:hover{border-color:var(--p1);transform:translateY(-2px);box-shadow:0 4px 14px rgba(224,80,140,.2);}
+.chip:hover::before{opacity:.08;}
+.chip:active{transform:none;}
+
+/* ── Typing ── */
+.typing{display:flex;gap:5px;align-items:center;padding:2px 0;}
+.typing span{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:bounce 1.4s ease-in-out infinite;}
+.typing span:nth-child(2){animation-delay:.2s;}
+.typing span:nth-child(3){animation-delay:.4s;}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);background:var(--muted);}30%{transform:translateY(-8px);background:var(--p1);}}
+
+/* ── INPUT ── */
+.inpbar{flex-shrink:0;background:var(--surf);backdrop-filter:blur(24px);
+  border-top:1px solid var(--border);padding:14px 22px 16px;position:relative;}
+.inpbar::before{content:'';position:absolute;top:-1px;left:0;right:0;height:1px;background:var(--grad);opacity:.28;}
+.inprow{display:flex;gap:10px;align-items:flex-end;}
+.inpwrap{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:13px;
+  padding:10px 15px;display:flex;align-items:flex-end;gap:8px;transition:.22s;}
+.inpwrap:focus-within{border-color:rgba(224,80,140,.5);box-shadow:0 0 0 3px rgba(224,80,140,.08);}
+#inp{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:inherit;
+  font-size:14px;resize:none;max-height:110px;overflow-y:auto;line-height:1.6;}
+#inp::placeholder{color:var(--muted);}
+#sbtn{cursor:pointer;width:40px;height:40px;border-radius:12px;border:none;background:var(--grad);
+  color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:all .22s cubic-bezier(.22,1,.36,1);box-shadow:0 4px 16px rgba(224,80,140,.3);position:relative;overflow:hidden;}
+#sbtn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.18),transparent);opacity:0;transition:.2s;}
+#sbtn:hover{transform:translateY(-2px);box-shadow:0 6px 22px rgba(224,80,140,.45);}
+#sbtn:hover::before{opacity:1;}
+#sbtn:active{transform:none;}
+#sbtn:disabled{opacity:.3;cursor:not-allowed;transform:none;box-shadow:none;}
+.hint{margin-top:7px;font-size:11px;color:var(--muted);text-align:center;}
+
+/* ── Compare hint banner ── */
+.compare-banner{
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:8px 20px;background:rgba(6,182,212,.06);border-bottom:1px solid rgba(6,182,212,.15);
+  font-size:12px;color:rgba(6,182,212,.8);letter-spacing:.3px;animation:fadeIn .5s ease;
+}
+.compare-banner span{opacity:.7;}
+
+/* Shimmer */
+.shimmer{background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.09) 50%,rgba(255,255,255,.04) 75%);
+  background-size:200% 100%;animation:shim 1.5s infinite;border-radius:8px;}
+@keyframes shim{0%{background-position:200%;}100%{background-position:-200%;}}
+
+/* Ripple */
+.ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,.22);transform:scale(0);animation:rpl .5s linear;pointer-events:none;}
+@keyframes rpl{to{transform:scale(4);opacity:0;}}
+
+@media(max-width:680px){.sidebar{display:none;}}
+</style>
+</head>
+<body>
+<canvas id="cvs"></canvas>
+<div class="grid"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">💘</div>
+  <div class="htitle"><h1>Cupid Agent</h1><p>Trợ Lý Ghép Đôi &amp; Phân Tích Độ Tương Thích · VinUni Lab 3</p></div>
+  <div id="sbadge"><div id="sdot"></div><span id="stxt">Đang kết nối…</span></div>
+</header>
+
+<!-- MODE BAR -->
+<div class="modebar">
+  <button class="mbtn act" id="b-react" onclick="setMode('react')">⚡ ReAct Agent</button>
+  <button class="mbtn" id="b-base" onclick="setMode('baseline')">💬 Chatbot Baseline</button>
+  <button class="mbtn compare-btn" id="b-cmp" onclick="setMode('compare')">⚔️ So Sánh Song Song</button>
+</div>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sbhdr"><span>📋</span> Test Cases</div>
+    <div class="tlist" id="tlist">
+      <div style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+        <div class="shimmer" style="height:50px;"></div>
+        <div class="shimmer" style="height:50px;"></div>
+        <div class="shimmer" style="height:50px;"></div>
+        <div class="shimmer" style="height:50px;"></div>
+        <div class="shimmer" style="height:50px;"></div>
+      </div>
+    </div>
+    <div class="tpanel" id="tpanel">
+      <div class="tinner">
+        <h3>🔍 Trace Log — ReAct Steps</h3>
+        <div id="tsteps"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CHAT AREA -->
+  <div class="chatarea" id="chatarea">
+
+    <!-- ─── SINGLE MODE default view ─── -->
+    <div id="single-view" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div class="msgs" id="msgs">
+        <div class="empty" id="empty">
+          <div class="eicon">💕</div>
+          <h2>Xin chào! Tôi là Cupid Agent</h2>
+          <p>Hỏi tôi bất cứ điều gì về tình yêu, ghép đôi và độ tương thích. Tôi có thể tra cứu hồ sơ và tính điểm thật sự!</p>
+          <div class="chips">
+            <button class="chip" onclick="sendChip(this)">Huy hợp với Lan không?</button>
+            <button class="chip" onclick="sendChip(this)">Tìm người phù hợp ở Hà Nội</button>
+            <button class="chip" onclick="sendChip(this)">Cách mở đầu trò chuyện hay</button>
+            <button class="chip" onclick="sendChip(this)">3 dấu hiệu của tình yêu thật</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── COMPARE MODE ─── -->
+    <div id="compare-view" style="flex:1;display:none;flex-direction:column;overflow:hidden;">
+      <div class="compare-banner">
+        ⚔️ <strong>So sánh song song</strong>
+        <span>— Baseline Chatbot vs ReAct Agent chạy cùng lúc</span>
+      </div>
+      <div class="compare-header">
+        <div class="col-label baseline"><div class="col-dot"></div>💬 Chatbot Baseline (Không có Tool)</div>
+        <div class="col-label react"><div class="col-dot"></div>⚡ ReAct Agent (Có Tool + Guardrails)</div>
+      </div>
+      <div class="split-msgs">
+        <div class="col-msgs baseline-col" id="base-msgs">
+          <div class="empty" style="min-height:200px;padding:40px 20px;">
+            <div class="eicon" style="font-size:40px;">💬</div>
+            <p style="font-size:12px;">Gửi câu hỏi để so sánh…</p>
+          </div>
+        </div>
+        <div class="col-msgs" id="react-msgs">
+          <div class="empty" style="min-height:200px;padding:40px 20px;">
+            <div class="eicon" style="font-size:40px;">⚡</div>
+            <p style="font-size:12px;">Gửi câu hỏi để so sánh…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INPUT (shared) -->
+    <div class="inpbar">
+      <div class="inprow">
+        <div class="inpwrap">
+          <textarea id="inp" rows="1" placeholder="Nhập câu hỏi…" onkeydown="hkey(event)" oninput="resize(this)"></textarea>
+        </div>
+        <button id="sbtn" onclick="send()">➤</button>
+      </div>
+      <div class="hint">Enter gửi &nbsp;·&nbsp; Shift+Enter xuống dòng</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── PARTICLES ── */
+(()=>{
+  const c=document.getElementById('cvs'),ctx=c.getContext('2d');
+  let W,H;
+  const resize=()=>{W=c.width=innerWidth;H=c.height=innerHeight;};
+  resize();addEventListener('resize',resize);
+  const COLS=['rgba(224,80,140,','rgba(168,85,247,','rgba(6,182,212,'];
+  class P{constructor(){this.r2();}r2(){this.x=Math.random()*W;this.y=Math.random()*H;
+    this.r=Math.random()*1.6+.4;this.vx=(Math.random()-.5)*.22;this.vy=(Math.random()-.5)*.22;
+    this.c=COLS[Math.floor(Math.random()*3)];this.a=Math.random()*.35+.08;}
+  upd(){this.x+=this.vx;this.y+=this.vy;if(this.x<0||this.x>W||this.y<0||this.y>H)this.r2();}
+  draw(){ctx.beginPath();ctx.arc(this.x,this.y,this.r,0,Math.PI*2);ctx.fillStyle=this.c+this.a+')';ctx.fill();}}
+  const ps=Array.from({length:110},()=>new P());
+  function lines(){for(let i=0;i<ps.length;i++)for(let j=i+1;j<ps.length;j++){
+    const dx=ps[i].x-ps[j].x,dy=ps[i].y-ps[j].y,d=Math.sqrt(dx*dx+dy*dy);
+    if(d<95){ctx.beginPath();ctx.moveTo(ps[i].x,ps[i].y);ctx.lineTo(ps[j].x,ps[j].y);
+      ctx.strokeStyle=`rgba(168,85,247,${.07*(1-d/95)})`;ctx.lineWidth=.5;ctx.stroke();}}}
+  const loop=()=>{ctx.clearRect(0,0,W,H);ps.forEach(p=>{p.upd();p.draw();});lines();requestAnimationFrame(loop);};
+  loop();
+})();
+
+/* ── STATE ── */
+const API='http://localhost:5000/api';
+let mode='react';
+
+/* ── STATUS ── */
+async function chkStatus(){
+  try{const r=await fetch(`${API}/status`),d=await r.json();
+    document.getElementById('sdot').className='on';
+    document.getElementById('stxt').textContent=`${d.provider} · ${d.model||'mock'} · ${d.tools_count} tools`;}
+  catch{document.getElementById('sdot').className='err';document.getElementById('stxt').textContent='Không kết nối được server';}
+}
+
+/* ── TEST CASES ── */
+async function loadTC(){
+  try{const r=await fetch(`${API}/test-cases`),ts=await r.json();
+    const list=document.getElementById('tlist');list.innerHTML='';
+    ts.forEach((t,i)=>{const el=document.createElement('div');el.className='titem';
+      el.style.animationDelay=`${i*55}ms`;
+      el.innerHTML=`<div class="tcat">${t.category}</div><div class="tq">${t.question}</div>`;
+      el.onclick=()=>{document.querySelectorAll('.titem').forEach(x=>x.classList.remove('act'));
+        el.classList.add('act');const ip=document.getElementById('inp');ip.value=t.question;resize(ip);ip.focus();};
+      list.appendChild(el);});}catch{}
+}
+
+/* ── MODE ── */
+function setMode(m){
+  mode=m;
+  ['react','base','cmp'].forEach(x=>document.getElementById('b-'+x).classList.remove('act'));
+  const ids={react:'b-react',baseline:'b-base',compare:'b-cmp'};
+  document.getElementById(ids[m]||'b-react').classList.add('act');
+
+  const sv=document.getElementById('single-view'),cv=document.getElementById('compare-view');
+  if(m==='compare'){sv.style.display='none';cv.style.display='flex';}
+  else{sv.style.display='flex';cv.style.display='none';}
+  if(m!=='react')document.getElementById('tpanel').classList.remove('open');
+}
+
+/* ── TEXTAREA ── */
+function resize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,110)+'px';}
+function hkey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
+function sendChip(el){document.getElementById('inp').value=el.textContent;resize(document.getElementById('inp'));send();}
+
+/* ── SEND ── */
+async function send(){
+  const ip=document.getElementById('inp'),text=ip.value.trim();
+  if(!text)return;
+  const btn=document.getElementById('sbtn');
+  btn.disabled=true;ip.value='';resize(ip);
+
+  if(mode==='compare') await sendCompare(text);
+  else{
+    const empty=document.getElementById('empty');
+    if(empty){empty.style.opacity='0';empty.style.transition='.3s';setTimeout(()=>empty.remove(),300);}
+    addMsg('user','🧑','Bạn',text);
+    const tid=addTyping('msgs');
+    try{
+      if(mode==='react') await doReact(text,tid);
+      else await doBaseline(text,tid);
+    }catch(e){rmTyping(tid);addMsg('agent','💘','Agent',`❌ Lỗi: ${e.message}`,true);}
+  }
+  btn.disabled=false;ip.focus();
+}
+
+/* ── SINGLE REACT ── */
+async function doReact(text,tid){
+  const r=await fetch(`${API}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+  const d=await r.json();rmTyping(tid);
+  if(d.trace&&d.trace.length)showTrace(d.trace);
+  addMsg('agent','💘','Cupid Agent',d.final_answer||d.error,d.guardrail_triggered);
+}
+
+/* ── SINGLE BASELINE ── */
+async function doBaseline(text,tid){
+  const r=await fetch(`${API}/baseline`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+  const d=await r.json();rmTyping(tid);
+  addMsg('agent','💬','Cupid Chatbot',d.response||d.error);
+}
+
+/* ══════════════════════════════════════
+   COMPARE MODE — chạy cả 2 song song
+══════════════════════════════════════ */
+async function sendCompare(text){
+  // Clear empty states
+  ['base-msgs','react-msgs'].forEach(id=>{
+    const el=document.getElementById(id).querySelector('.empty');
+    if(el)el.remove();
+  });
+
+  // User question banner in both columns
+  addCCard('base-msgs','user',text);
+  addCCard('react-msgs','user',text);
+
+  // Typing in both
+  const t1=addCTyping('base-msgs'),t2=addCTyping('react-msgs');
+
+  // Fire both API calls in parallel
+  const [baseRes, reactRes] = await Promise.allSettled([
+    fetch(`${API}/baseline`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})}).then(r=>r.json()),
+    fetch(`${API}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})}).then(r=>r.json()),
+  ]);
+
+  rmCTyping(t1);rmCTyping(t2);
+
+  const bText = baseRes.status==='fulfilled' ? (baseRes.value.response||baseRes.value.error||'Lỗi không xác định') : `❌ ${baseRes.reason}`;
+  const rData = reactRes.status==='fulfilled' ? reactRes.value : {final_answer:`❌ ${reactRes.reason}`,guardrail_triggered:true,trace:[]};
+
+  // Show trace
+  if(rData.trace&&rData.trace.length) showTrace(rData.trace);
+
+  // Determine winner by length/guardrail heuristic
+  const bWins=!rData.guardrail_triggered&&bText.length>rData.final_answer.length+80;
+  const rWins=!rData.guardrail_triggered&&!bWins;
+
+  // Render baseline answer
+  addCCard('base-msgs','baseline-card', bText, '💬 Chatbot Baseline', rWins?'🏆 Agent dùng Tool hiệu quả hơn!':null, rWins?'loser':'winner');
+
+  // Render react answer
+  addCCard('react-msgs','react-card', rData.final_answer||rData.error, '⚡ ReAct Agent',
+    rWins?'🏆 ReAct Agent — Có dữ liệu thực tế!':null, rWins?'winner':'');
+
+  scrollCol('base-msgs');scrollCol('react-msgs');
+}
+
+/* ── Compare Card helpers ── */
+function addCCard(colId, type, text, tagLabel, winnerLabel, winClass){
+  const col=document.getElementById(colId);
+  const div=document.createElement('div');
+  div.className=`ccard ${type}`;
+  let inner='';
+  if(tagLabel){
+    inner+=`<div class="ctag ${type==='baseline-card'?'t-base':'t-react'}">${tagLabel}</div><br/>`;
+  }
+  if(winnerLabel&&winClass==='winner'){
+    inner+=`<div class="winner-badge">✅ ${winnerLabel}</div><br/>`;
+  }
+  if(winnerLabel&&winClass==='loser'){
+    inner+=`<div class="loser-note">${winnerLabel}</div>`;
+  }
+  inner+=fmt(text);
+  div.innerHTML=inner;
+  col.appendChild(div);
+}
+
+function addCTyping(colId){
+  const id='ct-'+Date.now()+'-'+colId;
+  const col=document.getElementById(colId);
+  const div=document.createElement('div');div.id=id;
+  div.className='ccard';
+  div.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
+  col.appendChild(div);scrollCol(colId);return id;
+}
+function rmCTyping(id){const el=document.getElementById(id);if(el)el.remove();}
+function scrollCol(id){const el=document.getElementById(id);el.scrollTo({top:el.scrollHeight,behavior:'smooth'});}
+
+/* ── Single mode helpers ── */
+function addMsg(role,em,name,text,guard=false){
+  const msgs=document.getElementById('msgs');
+  const w=document.createElement('div');w.className=`msg ${role}${guard?' guard':''}`;
+  const t=new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit'});
+  w.innerHTML=`<div class="mav">${em}</div><div class="mbody">
+    <div class="mmeta"><span>${name}</span><span class="mtime">${t}</span></div>
+    <div class="mbubl">${fmt(text)}</div></div>`;
+  msgs.appendChild(w);msgs.scrollTo({top:msgs.scrollHeight,behavior:'smooth'});
+}
+function addTyping(mid){
+  const id='ty-'+Date.now();const msgs=document.getElementById(mid);
+  const w=document.createElement('div');w.id=id;w.className='msg agent';
+  w.innerHTML=`<div class="mav">💘</div><div class="mbody"><div class="mmeta"><span>Cupid Agent</span></div>
+    <div class="mbubl"><div class="typing"><span></span><span></span><span></span></div></div></div>`;
+  msgs.appendChild(w);msgs.scrollTo({top:msgs.scrollHeight,behavior:'smooth'});return id;
+}
+function rmTyping(id){const el=document.getElementById(id);if(el)el.remove();}
+
+/* ── Text format ── */
+function fmt(s){
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\n/g,'<br/>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/`(.+?)`/g,'<code style="background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;font-size:.87em">$1</code>');
+}
+
+/* ── Trace Panel ── */
+function showTrace(trace){
+  const panel=document.getElementById('tpanel'),steps=document.getElementById('tsteps');
+  panel.classList.add('open');steps.innerHTML='';
+  const LM={thought:['thought','Thought'],action:['action','Action'],observation:['observation','Obs'],
+    guardrail:['guardrail','🛡️ Guard'],final_answer:['final','Answer']};
+  trace.forEach((s,i)=>{
+    const [cls,lbl]=LM[s.type]||['thought',s.type];
+    const d=document.createElement('div');d.className='tstep';d.style.animationDelay=`${i*45}ms`;
+    const c=s.type==='observation'?pObs(s.content):fmt(s.content);
+    d.innerHTML=`<span class="tlbl ${cls}">${lbl}</span><span class="tcnt">${c}</span>`;
+    steps.appendChild(d);
+  });
+  const ti=panel.querySelector('.tinner');setTimeout(()=>ti.scrollTop=ti.scrollHeight,100);
+}
+function pObs(str){
+  try{const o=JSON.parse(str);
+    if(!o.success)return`<span style="color:var(--err)">❌ ${fmt(o.error)}</span>`;
+    return`<span style="color:var(--ok)">✅ </span><code style="font-size:10px;white-space:pre-wrap;word-break:break-all;opacity:.75">${fmt(JSON.stringify(o.data,null,2))}</code>`;}
+  catch{return fmt(str);}
+}
+
+/* ── Ripple ── */
+document.getElementById('sbtn').addEventListener('click',function(e){
+  const r=document.createElement('span');r.className='ripple';
+  const rc=this.getBoundingClientRect();
+  r.style.width=r.style.height=Math.max(rc.width,rc.height)+'px';
+  r.style.left=(e.clientX-rc.left-parseFloat(r.style.width)/2)+'px';
+  r.style.top=(e.clientY-rc.top-parseFloat(r.style.height)/2)+'px';
+  this.appendChild(r);setTimeout(()=>r.remove(),600);
+});
+
+/* ── INIT ── */
+chkStatus();loadTC();
+</script>
+</body>
+</html>
