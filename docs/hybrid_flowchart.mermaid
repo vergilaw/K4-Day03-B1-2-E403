@@ -1,0 +1,102 @@
+---
+title: "Cupid Agent — Hybrid Flowchart (Chatbot path vs ReAct Agent path)"
+---
+flowchart TD
+
+    START(["👤 Người dùng gửi câu hỏi"]) --> GR1
+
+    %% ==================================================
+    %% GUARDRAIL 1 — chặn trước khi tốn bất kỳ LLM call nào
+    %% ==================================================
+    GR1{"🛡️ GUARDRAIL 1 — Safety Filter<br/>Câu hỏi có chứa FORBIDDEN_KEYWORDS?<br/>nsfw · hate · harassment · bạo lực · xúc phạm · độc hại"}
+    GR1 -- "CÓ" --> BLOCK["⛔ NGẮT NGAY<br/>0 LLM call · 0 tool call<br/>«Yêu cầu bị ngắt do vi phạm<br/>tiêu chuẩn cộng đồng an toàn»"]
+    GR1 -- "KHÔNG" --> ROUTER
+    BLOCK --> FINISH
+
+    %% ==================================================
+    %% ROUTER — điểm phân luồng của kiến trúc Hybrid
+    %% ==================================================
+    ROUTER{"🔀 ROUTER PHÂN LUỒNG<br/>Câu hỏi có cần DỮ LIỆU THẬT<br/>từ kho hồ sơ không?"}
+    ROUTER -- "KHÔNG — chỉ cần kiến thức chung<br/>Test case 1 và 2" --> C1
+    ROUTER -- "CÓ — cần tra cứu / tính điểm<br/>Test case 3, 4, 5" --> A1
+
+    %% ==================================================
+    %% NHÁNH 1 — CHATBOT PATH
+    %% ==================================================
+    subgraph CHATPATH["🟢 CHATBOT PATH &nbsp;—&nbsp; rẻ, nhanh, 1 lượt"]
+        direction TB
+        C1["Nạp CHATBOT_BASELINE_PROMPT"]
+        C1 --> C2["📞 ĐÚNG 1 LLM call<br/>KHÔNG nạp tool nào"]
+        C2 --> C3{"Câu hỏi có lỡ đòi<br/>dữ liệu thật không?"}
+        C3 -- "Không" --> C4["💬 Trả lời trực tiếp<br/>từ kiến thức có sẵn"]
+        C3 -- "Có" --> C5["🛡️ Safe fallback<br/>«Tôi chưa được kết nối CSDL hồ sơ,<br/>bạn hãy dùng Cupid Agent»<br/>⛔ TUYỆT ĐỐI không bịa hồ sơ / điểm số"]
+    end
+
+    C4 --> FINISH
+    C5 --> FINISH
+
+    %% ==================================================
+    %% NHÁNH 2 — REACT AGENT PATH
+    %% ==================================================
+    subgraph AGENTPATH["🔵 REACT AGENT PATH &nbsp;—&nbsp; chậm, đắt, nhưng có BẰNG CHỨNG"]
+        direction TB
+        A1["Nạp REACT_SYSTEM_PROMPT<br/>+ 14 tool trong AVAILABLE_TOOLS"]
+        A1 --> A2["conversation_history = Question<br/>step = 0"]
+        A2 --> LOOP
+
+        LOOP{"🔄 step &lt; MAX_ITERATIONS ?<br/>giới hạn = 5"}
+        LOOP -- "HẾT LƯỢT" --> GR2["🛡️ GUARDRAIL 2<br/>Infinite-Loop Prevention<br/>→ SAFE_FALLBACK_MESSAGE"]
+
+        LOOP -- "CÒN LƯỢT" --> LLM["📞 LLM call<br/>sinh Thought → Action"]
+        LLM --> GR3{"🛡️ GUARDRAIL 3<br/>Chuỗi trả về có phải<br/>lỗi Provider không?<br/>is_provider_error&#40;&#41; · Exception / Error"}
+        GR3 -- "CÓ" --> GR3OUT["🔎 In chi tiết kỹ thuật cho DEV<br/>👤 User chỉ nhận SAFE_FALLBACK_MESSAGE<br/>⛔ Không đổ raw stack ra màn hình"]
+
+        GR3 -- "KHÔNG" --> HASFINAL{"Phản hồi có chứa<br/>«Final Answer:» ?"}
+
+        HASFINAL -- "CÓ" --> GR5
+        HASFINAL -- "KHÔNG" --> PARSE
+
+        PARSE{"🔍 parse_action&#40;&#41;<br/>Trích được Action hợp lệ?<br/>chỉ nhận tên tool ĐÃ ĐĂNG KÝ"}
+        PARSE -- "KHÔNG — chỉ là văn xuôi" --> PROSE["📝 Dùng luôn phản hồi<br/>hiện tại làm câu trả lời"]
+
+        PARSE -- "CÓ" --> EXEC["🛠️ execute_tool_call&#40;&#41;<br/>tra TOOL_ALIASES → chạy tool"]
+        EXEC --> OBS["👁️ Observation = chuỗi JSON<br/>success / data / error<br/>🛡️ safe_tool: lỗi → JSON, KHÔNG crash"]
+        OBS --> APPEND["📚 Nối Thought/Action/Observation<br/>vào conversation_history<br/>step += 1"]
+        APPEND --> LOOP
+
+        GR5{"🛡️ GUARDRAIL 5 — Anti-Hallucination<br/>Đã có ít nhất 1 Observation chưa?"}
+        GR5 -- "RỒI" --> GOOD["✅ RE-ACT COMPLETE<br/>🏁 Final Answer có bằng chứng từ tool"]
+        GR5 -- "CHƯA — Agent đang bịa" --> REJECT["⛔ Từ chối Final Answer<br/>→ ép chạy tiếp hoặc trả fallback"]
+    end
+
+    GR2 --> FINISH
+    GR3OUT --> FINISH
+    PROSE --> FINISH
+    GOOD --> FINISH
+    REJECT --> FINISH
+
+    FINISH(["🏁 Trả kết quả về cho người dùng"])
+
+    %% ==================================================
+    %% CHÚ THÍCH TRẠNG THÁI TRIỂN KHAI
+    %% ==================================================
+    NOTE1["⚠️ CHƯA CÓ TRONG CODE<br/>app.py hiện đẩy THẲNG mọi câu hỏi<br/>vào run_react_agent&#40;&#41;.<br/>run_baseline_chatbot&#40;&#41; đã viết xong<br/>nhưng KHÔNG được gọi ở __main__."]
+    NOTE1 -.-> ROUTER
+
+    NOTE2["⚠️ CHƯA CÓ TRONG CODE<br/>Luật này mới chỉ nằm trong prompt.<br/>app.py chỉ kiểm tra chuỗi «Final Answer:»<br/>rồi thoát — chưa đếm observation_count.<br/>→ Agent VẪN có thể bịa điểm số."]
+    NOTE2 -.-> GR5
+
+    %% ==================================================
+    %% ĐỊNH DẠNG
+    %% ==================================================
+    classDef done fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef guard fill:#fef9c3,stroke:#ca8a04,stroke-width:2px,color:#713f12
+    classDef danger fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+    classDef todo fill:#ffedd5,stroke:#ea580c,stroke-width:2px,stroke-dasharray:6 4,color:#7c2d12
+    classDef neutral fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0c4a6e
+
+    class GR1,GR2,GR3,GR3OUT guard
+    class BLOCK,C5 danger
+    class GR5,REJECT,NOTE1,NOTE2 todo
+    class C4,GOOD done
+    class START,FINISH,ROUTER,LOOP,C1,C2,C3,A1,A2,LLM,HASFINAL,PARSE,EXEC,OBS,APPEND,PROSE neutral

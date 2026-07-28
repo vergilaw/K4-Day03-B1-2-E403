@@ -397,3 +397,41 @@ BUG #6  code MAX_ITERATIONS = 5 | test case #5 đã ghi "5 bước" ✅
 - [x] **Sửa xong 6/6 bug** trong bug list và chạy lại harness kiểm chứng, không có regression (§7.3).
 - [ ] ⛔ **Còn nợ**: thay API key hợp lệ → chạy `python src/app.py` → dán log **LLM thật** vào §6.3 và §4.
 - [ ] ⛔ **Còn nợ**: cài phanh chống bịa đặt (chặn `Final Answer` khi `observation_count == 0`) vào `src/app.py` — xem §7.2.
+
+---
+
+# 📍 MỐC 4 — HYBRID FLOWCHART
+
+## 🔀 9. SƠ ĐỒ PHÂN LUỒNG HYBRID
+
+📎 **File sơ đồ**: [docs/hybrid_flowchart.mermaid](hybrid_flowchart.mermaid)
+
+### 9.1. Luật định tuyến (Router)
+
+Câu hỏi được phân về 1 trong 2 nhánh dựa trên **một câu hỏi duy nhất: có cần dữ liệu thật từ kho hồ sơ không?**
+
+| Nhánh | Khi nào dùng | Chi phí | Prompt |
+| :--- | :--- | :---: | :--- |
+| 🟢 **Chatbot path** | Tư vấn tâm lý, khái niệm chung, lời khuyên giao tiếp — trả lời được bằng kiến thức có sẵn. | **1 LLM call**, 0 tool | `CHATBOT_BASELINE_PROMPT` |
+| 🔵 **ReAct Agent path** | Cần tra hồ sơ, tính điểm tương thích, tìm ứng viên, gợi ý địa điểm — **bắt buộc có bằng chứng từ tool**. | 2–5 LLM call + n tool call | `REACT_SYSTEM_PROMPT` |
+
+### 9.2. Áp dụng lên 5 Test Case
+
+| # | Câu hỏi (rút gọn) | Nhánh | Lý do |
+| :-: | :--- | :--- | :--- |
+| 1 | Mở đầu trò chuyện sao cho không nhạt | 🟢 Chatbot | Kiến thức chung, không có thực thể nào cần tra cứu |
+| 2 | 3 dấu hiệu hai người hợp nhau | 🟢 Chatbot | Lý thuyết tổng quát |
+| 3 | Huy hợp với Lan đến mức nào | 🔵 ReAct | Cần `find_user_by_name` ×2 → `calculate_compatibility` |
+| 4 | Tìm người hợp ở HN + chỗ hẹn hò 300k | 🔵 ReAct | Cần `search_candidates` + `suggest_date_ideas` |
+| 5 | Tương thích với "Nguyễn Hà Zzz" | 🔵 ReAct | Phải để **tool** xác nhận hồ sơ không tồn tại, không được đoán |
+
+> 💡 **Vì sao phải Hybrid**: đẩy case 1–2 qua ReAct sẽ tốn gấp 2–5 lần chi phí cho cùng một câu trả lời. Ngược lại, đẩy case 3–5 qua Chatbot thì được câu trả lời mượt mà nhưng **không có bằng chứng** — đúng cái bẫy đã ghi nhận ở Mốc 2 (§2.3, case #4).
+
+### 9.3. ⚠️ Trạng thái triển khai
+
+Sơ đồ thể hiện **kiến trúc mục tiêu**. Hai khối được đánh dấu nét đứt (cam) trong file `.mermaid` là **chưa có trong code**:
+
+1. **Khối ROUTER** — `app.py` hiện đẩy thẳng **mọi** câu hỏi vào `run_react_agent()`. Hàm `run_baseline_chatbot()` đã viết xong nhưng **không được gọi** ở `__main__`.
+2. **Guardrail 5 (Anti-Hallucination)** — mới chỉ là luật trong prompt, chưa cưỡng chế bằng code (xem §7.2).
+
+Bốn khối Guardrail còn lại (Safety Filter, MAX_ITERATIONS, Provider Failure, parse_action lọc tool ảo) **đã chạy thật** và có bằng chứng ở §6.3 / §7.3.
