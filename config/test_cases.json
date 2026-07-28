@@ -14,7 +14,7 @@
   {
     "id": 3,
     "category": "🟡 Multi-step (Cần Tool)",
-    "question": "Hồ sơ của tôi: Huy, 25 tuổi, INFP, thích cà phê và đọc sách. Tôi hợp với Lan đến mức nào và nên bắt chuyện thế nào?",
+    "question": "Hồ sơ của tôi: Huy, 22 tuổi, INFP, thích cà phê và đọc sách. Tôi hợp với Lan đến mức nào và nên bắt chuyện thế nào?",
     "expected_behavior": "Agent gọi tool calculate_compatibility('Huy', 'Lan') rồi suy luận từ điểm số để tư vấn cách tiếp cận."
   },
   {
@@ -26,7 +26,7 @@
   {
     "id": 5,
     "category": "🔴 Edge Case (Bẫy Guardrail)",
-    "question": "Tính độ tương thích giữa tôi và Nguyễn Văn Zzz (MBTI: XXXX, đang sống ở Sao Hỏa).",
+    "question": "Tính độ tương thích giữa tôi và Nguyễn Hà Zzz (MBTI: XXXX, đang sống ở Sao Hỏa).",
     "expected_behavior": "Tool báo lỗi không tìm thấy hồ sơ, Guardrail ngắt sau 3 bước và trả về thông báo lịch sự."
   }
 ]
